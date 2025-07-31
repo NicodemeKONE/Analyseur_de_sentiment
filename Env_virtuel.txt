@@ -1,0 +1,123 @@
+GUIDE PRATIQUE ENVIRONNEMENTS VIRTUELS PYTHON - WINDOWS
+
+1. INSTALLATION
+-----------------
+- Vérifier Python installé :
+  python --version
+  py --version
+
+- Si non installé :
+  1. Télécharger sur python.org
+  2. Cocher "Add Python to PATH"
+  3. Installer
+
+- Mettre à jour pip :
+  python -m pip install --upgrade pip
+
+2. CREATION ENVIRONNEMENT
+-------------------------
+Commande :
+  python -m venv nom_env
+
+Exemple :
+  python -m venv monprojet_env
+
+Bonnes pratiques :
+- Créer dans le dossier du projet
+- Noms courts sans espaces
+- Convention : suffixe _env
+
+3. ACTIVATION
+-------------
+Commande :
+  .\nom_env\Scripts\activate
+
+L'invite change pour montrer l'env actif :
+  (monprojet_env) C:\chemin>
+
+4. GESTION PAQUETS
+------------------
+- Installer un paquet :
+  pip install nom_paquet
+
+- Installer depuis requirements.txt :
+  pip install -r requirements.txt
+
+- Sauvegarder les paquets installés :
+  pip freeze > requirements.txt
+
+5. DESACTIVATION
+----------------
+Commande :
+  deactivate
+
+6. STRUCTURE PROJET IDEALE
+--------------------------
+mon_projet/
+│
+├── mon_env/
+├── src/
+│   ├── main.py
+│   └── ...
+├── data/
+├── requirements.txt
+└── README.md
+
+7. COMMANDES UTILES
+-------------------
+where python      # Vérifie Python utilisé
+pip list         # Liste paquets installés
+pip show package # Info sur un paquet
+python -m pip check # Vérifie conflits
+
+8. INTEGRATION VS CODE
+----------------------
+1. Ouvrir dossier projet
+2. Ctrl+Shift+P > "Python: Select Interpreter"
+3. Choisir l'interpréteur de l'environnement virtuel
+
+9. PROBLEMES COURANTS
+---------------------
+- Activation impossible :
+  Exécuter en admin ou :
+  Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
+
+- Paquets introuvables :
+  Vérifier chemin avec where python
+
+10. EXEMPLE COMPLET STREAMLIT
+----------------------------
+# Création projet
+mkdir monprojet
+cd monprojet
+
+# Création env
+python -m venv streamlit_env
+
+# Activation
+.\streamlit_env\Scripts\activate
+
+# Installation paquets
+pip install streamlit pandas numpy
+
+# Sauvegarde
+pip freeze > requirements.txt
+
+# Lancement
+streamlit run app.py
+
+# Désactivation
+deactivate
+
+11. NETTOYAGE
+-------------
+Pour supprimer :
+1. Désactiver si actif (deactivate)
+2. Supprimer le dossier de l'environnement
+
+CONSEILS FINAUX
+---------------
+- Un environnement par projet
+- Toujours vérifier l'env actif avant installations
+- Versionner requirements.txt
+- Documenter les dépendances spécifiques
