@@ -756,7 +756,10 @@ def handle_manual_text_analysis():
     with col2:
         st.write("**Exemples de textes:**")
         examples = [
-            "Service client fantastique !"
+            "Service client fantastique !",
+            "Très déçu de cet achat...",
+            "Produit correct, sans plus.",
+            "Interface intuitive et moderne"
         ]
         
         for example in examples:

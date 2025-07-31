@@ -1,0 +1,20 @@
+{
+    "positive": {
+        "adjective": ["excellent", "fantastique", "parfait", "génial", "remarquable"],
+        "intensifier": ["recommande vivement", "adore", "apprécie énormément"],
+        "action_positive": ["recommande", "valide", "adopte", "approuve"],
+        "noun": ["application", "plateforme", "solution", "interface"]
+    },
+    "negative": {
+        "adjective": ["décevant", "problématique", "défaillant", "inadmissible"],
+        "intensifier": ["frustrant", "décevant", "problématique", "inacceptable"],
+        "action_negative": ["déconseille", "évite", "regrette", "critique"],
+        "noun": ["application", "plateforme", "solution", "interface"]
+    },
+    "neutral": {
+        "adjective": ["correct", "standard", "classique", "basique"],
+        "opinion_neutre": ["avis mitigé", "retour neutre", "impression correcte"],
+        "evaluation": ["on verra", "à voir", "en cours d'évaluation"],
+        "noun": ["application", "plateforme", "solution", "interface"]
+    }
+}
