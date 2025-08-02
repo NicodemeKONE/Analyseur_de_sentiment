@@ -728,13 +728,38 @@ def create_lexicon_files():
 
 def main():
     """Interface principale améliorée"""
-    # Header principal
+    # Header principal (propre)
     st.markdown("""
     <div class="main-header">
         <h1>Analyseur de Sentiment Pro</h1>
         <p>Analyse avancée de sentiment avec visualisations interactives</p>
     </div>
     """, unsafe_allow_html=True)
+    
+    # Instructions séparées - approche native Streamlit
+    with st.container():
+        # Utiliser un expander ouvert pour créer une zone unifiée
+        with st.expander("📋 **Instructions rapides**", expanded=True):
+            # Colonnes à l'intérieur de l'expander
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.markdown("""
+                **1.** **Choisissez votre mode** dans la sidebar (>>) ⬅️  
+                **2.** **📝 Texte Manuel** : Testez avec les exemples
+                """)
+            
+            with col2:
+                st.markdown("""
+                **3.** **📁 Fichier Upload** : Analysez vos CSV/Excel  
+                **4.** **🐦 APIs** : Twitter/Facebook ou simulation
+                """)
+            
+            with col3:
+                st.markdown("""
+                **5.** **📊 Radar** : Mode démo pour comparer  
+                **6.** **💾 Export** : JSON/CSV/Excel
+                """)
     
     # Sidebar pour la configuration
     with st.sidebar:
@@ -747,8 +772,8 @@ def main():
                 "📝 Texte Manuel", 
                 "📁 Fichier Upload", 
                 "🐦 Twitter Simulation",
-                "🐦 Twitter API Réelle",  # 🆕 NOUVEAU
-                "📘 Facebook API",  # 🆕 NOUVEAU
+                "🐦 Twitter API Réelle",
+                "📘 Facebook API",
                 "🔄 Temps Réel",
                 "📊 Analyse Comparative"
             ]
@@ -799,14 +824,19 @@ def main():
             handle_file_upload_analysis()
         elif analysis_mode == "🐦 Twitter Simulation":
             handle_twitter_analysis()
-        elif analysis_mode == "🔄 Temps Réel":
-            handle_realtime_simulation()
-        elif analysis_mode == "📊 Analyse Comparative":
-            handle_comparative_analysis()
         elif analysis_mode == "🐦 Twitter API Réelle":
             handle_twitter_real_api()
         elif analysis_mode == "📘 Facebook API":
             handle_facebook_api()
+        elif analysis_mode == "🔄 Temps Réel":
+            handle_realtime_simulation()
+        elif analysis_mode == "📊 Analyse Comparative":
+            handle_comparative_analysis()
+
+
+
+
+
 
 
 
