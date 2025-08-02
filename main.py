@@ -748,6 +748,7 @@ def main():
                 "📁 Fichier Upload", 
                 "🐦 Twitter Simulation",
                 "🐦 Twitter API Réelle",  # 🆕 NOUVEAU
+                "📘 Facebook API",  # 🆕 NOUVEAU
                 "🔄 Temps Réel",
                 "📊 Analyse Comparative"
             ]
@@ -804,6 +805,8 @@ def main():
             handle_comparative_analysis()
         elif analysis_mode == "🐦 Twitter API Réelle":
             handle_twitter_real_api()
+        elif analysis_mode == "📘 Facebook API":
+            handle_facebook_api()
 
 
 
@@ -2035,11 +2038,6 @@ def handle_twitter_real_api():
 
 
 
-
-
-
-
-
 def generate_demo_tweets(term, count):
     """Génère des tweets de démo pour tester l'interface"""
     demo_tweets = [
@@ -2086,6 +2084,313 @@ def analyze_demo_tweets(tweets, search_term):
     
     # Utiliser VOTRE fonction d'affichage existante !
     display_social_media_results(results, search_term, "Twitter (Démo)")
+
+
+
+
+def handle_facebook_api():
+    """Interface pour l'analyse Facebook avec vraie API"""
+    st.subheader("📘 Analyse Facebook")
+    
+    # Section configuration API
+    with st.expander("🔑 Configuration API Facebook (Cliquez ici d'abord)", expanded=True):
+        st.markdown("""
+        **Pour Facebook, vous avez besoin d'un token d'accès :**
+        1. 📝 Allez sur [developers.facebook.com](https://developers.facebook.com)
+        2. 🆕 Créez une App Facebook
+        3. 🔑 Récupérez votre Access Token
+        
+        ⚠️ **Note :** Facebook limite l'accès aux posts publics et pages
+        """)
+        
+        access_token = st.text_input(
+            "Access Token Facebook:", 
+            type="password",
+            placeholder="Collez votre Access Token ici...",
+            help="Token disponible dans Facebook Developers"
+        )
+        
+        page_id = st.text_input(
+            "ID de Page Facebook (optionnel):",
+            placeholder="Ex: 20531316728 (Coca-Cola)",
+            help="Pour analyser une page spécifique"
+        )
+        
+        if access_token:
+            st.success("🔑 Token Facebook saisi !")
+            st.session_state.facebook_access_token = access_token
+            if page_id:
+                st.session_state.facebook_page_id = page_id
+    
+    # Interface de recherche
+    col1, col2, col3 = st.columns([2, 1, 1])
+    
+    with col1:
+        if st.session_state.get('facebook_page_id'):
+            search_term = st.text_input(
+                "Mot-clé dans les posts:",
+                value="",
+                placeholder="Filtrer les posts par mot-clé (optionnel)"
+            )
+        else:
+            search_term = st.text_input(
+                "Recherche publique:",
+                value="OpenAI",
+                placeholder="Terme à rechercher"
+            )
+    
+    with col2:
+        post_count = st.selectbox("Nombre de posts", [10, 25, 50], index=0)
+    
+    with col3:
+        mode = st.selectbox("Mode", ["🔧 Démo (fake data)", "🌐 API Réelle"])
+    
+    # Bouton d'analyse
+    if st.button("🔍 Analyser Facebook", type="primary"):
+        if mode == "🔧 Démo (fake data)":
+            st.info(f"🔧 **Mode démo** - Simulation de {post_count} posts Facebook pour '{search_term}'")
+            demo_posts = generate_demo_facebook_posts(search_term, post_count)
+            analyze_demo_facebook_posts(demo_posts, search_term)
+            
+        elif mode == "🌐 API Réelle":
+            if not st.session_state.get('facebook_access_token'):
+                st.error("⚠️ Veuillez d'abord configurer votre Access Token ci-dessus")
+            else:
+                st.info(f"🌐 **API Facebook** - Récupération des posts pour '{search_term}'...")
+                fetch_and_analyze_facebook_data(search_term, post_count)
+
+
+def generate_demo_facebook_posts(term, count):
+    """Génère des posts Facebook de démo"""
+    demo_posts = [
+        f"Super content de découvrir {term} ! Interface vraiment intuitive 👍",
+        f"Déçu de {term}... j'espérais mieux pour le prix 😞",
+        f"Test de {term} en cours dans notre équipe, premiers retours positifs",
+        f"{term} change vraiment la donne ! Bravo à l'équipe 🎉",
+        f"Problèmes techniques avec {term} depuis la dernière mise à jour 🐛",
+        f"Formation {term} très enrichissante, je recommande !",
+        f"Prix de {term} un peu élevé mais la qualité est là",
+        f"Support client {term} réactif et professionnel 💪",
+    ]
+    
+    result = []
+    for i in range(count):
+        post = demo_posts[i % len(demo_posts)]
+        result.append({
+            'message': post,
+            'id': f'fb_demo_{i}',
+            'created_time': datetime.now(),
+            'likes': {'summary': {'total_count': np.random.randint(0, 500)}},
+            'comments': {'summary': {'total_count': np.random.randint(0, 50)}}
+        })
+    
+    return result
+
+def analyze_demo_facebook_posts(posts, search_term):
+    """Analyse les posts Facebook de démo"""
+    st.success(f"✅ Analyse de {len(posts)} posts Facebook de démo terminée")
+    
+    # Utiliser VOTRE système d'analyse existant
+    results = []
+    progress_bar = st.progress(0)
+    
+    for i, post in enumerate(posts):
+        # Analyser le message du post
+        result = analyzer.analyze_sentiment_comprehensive(post['message'])
+        result.metadata = {
+            'platform': 'Facebook (Démo)',
+            'post_id': post['id'],
+            'created_time': post['created_time'],
+            'likes_count': post['likes']['summary']['total_count'],
+            'comments_count': post['comments']['summary']['total_count'],
+            'demo_mode': True
+        }
+        results.append(result)
+        progress_bar.progress((i + 1) / len(posts))
+    
+    progress_bar.empty()
+    
+    # Utiliser VOTRE fonction d'affichage existante !
+    display_social_media_results(results, search_term, "Facebook (Démo)")
+    
+    # Bonus Facebook : Afficher métriques d'engagement
+    display_facebook_engagement_stats(results)
+
+def display_facebook_engagement_stats(results):
+    """Affiche des stats spécifiques Facebook"""
+    st.subheader("📊 Métriques d'Engagement Facebook")
+    
+    likes = [r.metadata.get('likes_count', 0) for r in results]
+    comments = [r.metadata.get('comments_count', 0) for r in results]
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        avg_likes = np.mean(likes) if likes else 0
+        st.metric("👍 Likes moyen", f"{avg_likes:.1f}")
+    
+    with col2:
+        avg_comments = np.mean(comments) if comments else 0
+        st.metric("💬 Commentaires moyen", f"{avg_comments:.1f}")
+    
+    with col3:
+        scores = [r.consensus['score'] for r in results]
+        if len(scores) > 3:
+            correlation = np.corrcoef(scores, likes)[0,1] if np.std(likes) > 0 else 0
+            st.metric("📈 Corrélation Sentiment/Likes", f"{correlation:.2f}")
+
+
+
+def fetch_and_analyze_facebook_data(search_term, count):
+    """Récupère et analyse de vrais posts Facebook"""
+    access_token = st.session_state.get('facebook_access_token')
+    page_id = st.session_state.get('facebook_page_id')
+    
+    with st.spinner("🌐 Connexion à Facebook..."):
+        try:
+            import facebook
+            
+            # Connexion à l'API Facebook
+            graph = facebook.GraphAPI(access_token=access_token)
+            
+            if page_id:
+                # Analyser une page spécifique
+                posts, error = fetch_facebook_page_posts(graph, page_id, count, search_term)
+            else:
+                # Recherche publique (limitée)
+                posts, error = fetch_facebook_public_posts(graph, search_term, count)
+            
+            if error:
+                st.error(error)
+                return
+            
+            if not posts:
+                st.warning(f"Aucun post trouvé pour '{search_term}'")
+                return
+            
+            st.success(f"✅ {len(posts)} posts Facebook récupérés !")
+            
+            # Analyser avec VOTRE système existant
+            results = []
+            progress_bar = st.progress(0)
+            
+            for i, post in enumerate(posts):
+                # Analyser le contenu du post
+                text_content = post.get('message', '') or post.get('story', '') or 'Post sans texte'
+                
+                result = analyzer.analyze_sentiment_comprehensive(text_content)
+                result.metadata = {
+                    'platform': 'Facebook (API)',
+                    'post_id': post['id'],
+                    'created_time': post.get('created_time'),
+                    'likes_count': post.get('likes', {}).get('summary', {}).get('total_count', 0),
+                    'comments_count': post.get('comments', {}).get('summary', {}).get('total_count', 0),
+                    'shares_count': post.get('shares', {}).get('count', 0),
+                    'real_data': True
+                }
+                results.append(result)
+                progress_bar.progress((i + 1) / len(posts))
+            
+            progress_bar.empty()
+            
+            # Utiliser VOTRE fonction d'affichage existante !
+            display_social_media_results(results, search_term, "Facebook (API)")
+            
+            # Stats d'engagement Facebook réelles
+            display_facebook_engagement_stats(results)
+            
+            # Bonus : Afficher quelques posts sources
+            with st.expander("📝 Exemples de posts analysés"):
+                for i, post in enumerate(posts[:3]):
+                    text_content = post.get('message', '') or post.get('story', '') or 'Post sans texte'
+                    st.text_area(
+                        f"Post {i+1}:", 
+                        value=text_content, 
+                        height=100, 
+                        disabled=True,
+                        key=f"real_fb_post_{i}"
+                    )
+                    
+                    # Métriques du post
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        likes = post.get('likes', {}).get('summary', {}).get('total_count', 0)
+                        st.caption(f"👍 {likes} likes")
+                    with col2:
+                        comments = post.get('comments', {}).get('summary', {}).get('total_count', 0)
+                        st.caption(f"💬 {comments} commentaires")
+                    with col3:
+                        shares = post.get('shares', {}).get('count', 0)
+                        st.caption(f"🔄 {shares} partages")
+                    
+                    st.divider()
+            
+        except ImportError:
+            st.error("📦 Installez facebook-sdk: pip install facebook-sdk")
+        except Exception as e:
+            st.error(f"❌ Erreur Facebook API: {e}")
+            st.info("💡 Vérifiez votre Access Token et les permissions")
+
+def fetch_facebook_page_posts(graph, page_id, limit, keyword=None):
+    """Récupère les posts d'une page Facebook spécifique"""
+    try:
+        # Récupérer les posts de la page
+        posts_data = graph.get_object(
+            f'{page_id}/posts',
+            fields='id,message,story,created_time,likes.summary(true),comments.summary(true),shares'
+        )
+        
+        posts = posts_data.get('data', [])
+        
+        # Filtrer par mot-clé si spécifié
+        if keyword and keyword.strip():
+            filtered_posts = []
+            for post in posts:
+                message = post.get('message', '') or post.get('story', '')
+                if keyword.lower() in message.lower():
+                    filtered_posts.append(post)
+            posts = filtered_posts
+        
+        # Limiter le nombre
+        posts = posts[:limit]
+        
+        return posts, None
+        
+    except facebook.GraphAPIError as e:
+        if 'access token' in str(e).lower():
+            return [], "❌ Token d'accès invalide ou expiré"
+        elif 'permission' in str(e).lower():
+            return [], "❌ Permissions insuffisantes - Vérifiez les droits de votre App"
+        else:
+            return [], f"❌ Erreur Facebook: {e}"
+    except Exception as e:
+        return [], f"❌ Erreur: {e}"
+
+def fetch_facebook_public_posts(graph, search_term, limit):
+    """Recherche publique Facebook (très limitée)"""
+    try:
+        # Note: Facebook a drastiquement limité la recherche publique
+        st.warning("⚠️ Facebook limite beaucoup la recherche publique. Utilisez plutôt l'analyse d'une page spécifique.")
+        
+        # Essayer de rechercher des pages publiques
+        search_result = graph.search(
+            q=search_term,
+            type='page',
+            fields='id,name,about'
+        )
+        
+        if search_result.get('data'):
+            st.info(f"📄 Pages trouvées pour '{search_term}': {[page['name'] for page in search_result['data'][:3]]}")
+            st.info("💡 Conseil: Copiez l'ID d'une page et utilisez l'analyse par page")
+        
+        return [], "ℹ️ Utilisez l'analyse par page pour de meilleurs résultats"
+        
+    except Exception as e:
+        return [], f"❌ Erreur recherche: {e}"
+
+
+
+
 
 
 
