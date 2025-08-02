@@ -28,9 +28,6 @@ from typing import List, Dict, Any, Optional
 import hashlib
 import logging
 from dataclasses import dataclass
-import platform
-import tweepy
-import sys
 
 # Configuration du logging
 logging.basicConfig(level=logging.INFO)
@@ -91,148 +88,102 @@ class FrenchSentimentLexicon:
     """Lexique de sentiment français étendu basé sur FEEL et autres sources"""
     
     def __init__(self):
-        # CORRECTION CRITIQUE : Initialisation garantie avec valeurs par défaut
-        self.positive_words = {}
-        self.negative_words = {}
-        self.intensifiers = {}
+        self.positive_words = self._load_lexicon('positive')
+        self.negative_words = self._load_lexicon('negative')
+        self.intensifiers = self._load_intensifiers()
         self.negation_words = {'ne', 'pas', 'non', 'jamais', 'aucun', 'rien', 'personne', 'nulle', 'nullement'}
         
-        # Chargement sécurisé avec fallback robuste
-        self._initialize_lexicons()
+    def _load_lexicon(self, polarity: str) -> Dict[str, float]:
+        """Charge les lexiques depuis des fichiers externes ou utilise les lexiques intégrés"""
+        lexicon_file = Path(f"lexicons/french_{polarity}.json")
         
-    def _initialize_lexicons(self):
-        """Initialise les lexiques avec gestion d'erreur robuste"""
-        try:
-            # Tentative de chargement depuis fichiers externes
-            self._try_load_external_lexicons()
-        except Exception as e:
-            logger.warning(f"Échec chargement externe: {e}")
-        
-        # Vérification et fallback si nécessaire
-        if not self._validate_lexicons():
-            logger.info("Chargement des lexiques intégrés par défaut")
-            self._load_default_lexicons()
-        
-        # Chargement des intensificateurs
-        self.intensifiers = self._load_intensifiers()
-        
-        # Vérification finale
-        total_words = len(self.positive_words) + len(self.negative_words)
-        logger.info(f"Lexiques chargés: {len(self.positive_words)} positifs, {len(self.negative_words)} négatifs (total: {total_words})")
-    
-    def _try_load_external_lexicons(self):
-        """Tentative de chargement depuis fichiers externes"""
-        # CORRECTION : Vérifier l'existence du dossier
-        lexicon_dir = Path("lexicons")
-        if not lexicon_dir.exists():
-            logger.info("Dossier lexicons/ non trouvé, utilisation des lexiques intégrés")
-            return
-        
-        positive_file = lexicon_dir / "french_positive.json"
-        negative_file = lexicon_dir / "french_negative.json"
-        
-        if positive_file.exists() and negative_file.exists():
+        if lexicon_file.exists():
             try:
-                with open(positive_file, 'r', encoding='utf-8') as f:
-                    self.positive_words = json.load(f)
-                
-                with open(negative_file, 'r', encoding='utf-8') as f:
-                    self.negative_words = json.load(f)
-                
-                logger.info("Lexiques externes chargés avec succès")
-            except (json.JSONDecodeError, Exception) as e:
-                logger.warning(f"Erreur lecture fichiers externes: {e}")
-                self.positive_words = {}
-                self.negative_words = {}
-    
-    def _validate_lexicons(self):
-        """Valide que les lexiques contiennent des données valides"""
-        if not isinstance(self.positive_words, dict) or not isinstance(self.negative_words, dict):
-            return False
+                with open(lexicon_file, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            except Exception as e:
+                logger.warning(f"Erreur lors du chargement de {lexicon_file}: {e}")
         
-        total_words = len(self.positive_words) + len(self.negative_words)
-        return total_words >= 50  # Seuil minimum
-    
-    def _load_default_lexicons(self):
-        """Charge les lexiques intégrés par défaut - GARANTI de fonctionner"""
-        self.positive_words = {
-            # Émotions positives de base
-            'excellent': 0.9, 'fantastique': 0.9, 'génial': 0.8, 'parfait': 0.9,
-            'superbe': 0.8, 'incroyable': 0.8, 'merveilleux': 0.9, 'extraordinaire': 0.9,
-            'magnifique': 0.8, 'formidable': 0.8, 'remarquable': 0.7, 'exceptionnel': 0.9,
-            
-            # Satisfaction et approbation
-            'satisfait': 0.6, 'content': 0.6, 'heureux': 0.7, 'ravi': 0.8, 'enchanté': 0.8,
-            'comblé': 0.7, 'réjoui': 0.7, 'enthousiaste': 0.8, 'optimiste': 0.6,
-            
-            # Qualité et performance
-            'bon': 0.5, 'bien': 0.5, 'mieux': 0.6, 'meilleur': 0.7, 'top': 0.8,
-            'qualité': 0.6, 'efficace': 0.6, 'performant': 0.7, 'rapide': 0.6,
-            'fiable': 0.6, 'solide': 0.6, 'robuste': 0.6, 'stable': 0.5,
-            
-            # Recommandation et amour
-            'recommande': 0.7, 'adore': 0.8, 'aime': 0.6, 'apprécie': 0.6,
-            'préfère': 0.5, 'choisis': 0.5, 'adopte': 0.6,
-            
-            # Innovation et modernité
-            'innovant': 0.7, 'moderne': 0.5, 'nouveau': 0.4, 'révolutionnaire': 0.8,
-            'avancé': 0.6, 'sophistiqué': 0.6, 'intelligent': 0.6,
-            
-            # Service et relation client
-            'accueillant': 0.6, 'aimable': 0.6, 'courtois': 0.6, 'professionnel': 0.6,
-            'attentif': 0.6, 'réactif': 0.7, 'disponible': 0.5, 'serviable': 0.7,
-            
-            # Facilité et praticité
-            'facile': 0.6, 'simple': 0.5, 'pratique': 0.6, 'intuitif': 0.7,
-            'accessible': 0.5, 'clair': 0.5, 'évident': 0.5,
-            
-            # Argot et expressions familières
-            'cool': 0.6, 'sympa': 0.6, 'chouette': 0.6, 'super': 0.7,
-            'extra': 0.7, 'terrible': 0.8, 'mortel': 0.7, 'géniale': 0.8,
-            
-            # Intensificateurs positifs
-            'très': 0.3, 'vraiment': 0.3, 'extrêmement': 0.4, 'particulièrement': 0.3,
-        }
-        
-        self.negative_words = {
-            # Émotions négatives fortes
-            'horrible': -0.9, 'affreux': -0.9, 'terrible': -0.8, 'catastrophique': -0.9,
-            'désastreux': -0.9, 'épouvantable': -0.9, 'abominable': -0.9, 'atroce': -0.9,
-            
-            # Déception et mécontentement
-            'décevant': -0.7, 'décevante': -0.7, 'déçu': -0.6, 'mécontent': -0.6,
-            'insatisfait': -0.6, 'frustré': -0.6, 'agacé': -0.5, 'énervé': -0.6,
-            'irrité': -0.6, 'fâché': -0.6, 'en_colère': -0.7,
-            
-            # Qualité insuffisante
-            'nul': -0.8, 'mauvais': -0.6, 'médiocre': -0.6, 'pathétique': -0.8,
-            'minable': -0.8, 'pitoyable': -0.8, 'lamentable': -0.8, 'navrant': -0.7,
-            'décevant': -0.7, 'insuffisant': -0.6, 'défaillant': -0.6,
-            
-            # Problèmes techniques
-            'bug': -0.6, 'erreur': -0.5, 'problème': -0.6, 'panne': -0.7,
-            'dysfonctionnement': -0.7, 'défaut': -0.6, 'défectueux': -0.7,
-            'cassé': -0.7, 'hs': -0.7, 'inutilisable': -0.8,
-            
-            # Service client
-            'impoli': -0.7, 'désagréable': -0.6, 'irrespectueux': -0.7,
-            'incompétent': -0.7, 'négligent': -0.6, 'indifférent': -0.5,
-            'inattentif': -0.6, 'lent': -0.5, 'retard': -0.5,
-            
-            # Argot et expressions familières
-            'naze': -0.7, 'pourri': -0.8, 'foireux': -0.8, 'merdique': -0.9,
-            'craignos': -0.7, 'bidon': -0.6, 'arnaque': -0.8,
-            
-            # Intensité et gravité
-            'grave': -0.6, 'sérieux': -0.5, 'important': -0.4, 'majeur': -0.6,
-            'critique': -0.7, 'urgent': -0.5, 'inquiétant': -0.6,
-            
-            # Regret et déception
-            'regrette': -0.6, 'dommage': -0.5, 'hélas': -0.5, 'malheureusement': -0.4,
-            
-            # Négation et refus
-            'refuse': -0.6, 'rejette': -0.6, 'évite': -0.5, 'fuis': -0.6,
-        }
+        # Lexiques intégrés étendus basés sur FEEL et recherches linguistiques
+        if polarity == 'positive':
+            return {
+                # Émotions positives de base
+                'excellent': 0.9, 'fantastique': 0.9, 'génial': 0.8, 'parfait': 0.9,
+                'superbe': 0.8, 'incroyable': 0.8, 'merveilleux': 0.9, 'extraordinaire': 0.9,
+                'magnifique': 0.8, 'formidable': 0.8, 'remarquable': 0.7, 'exceptionnel': 0.9,
+                
+                # Satisfaction et approbation
+                'satisfait': 0.6, 'content': 0.6, 'heureux': 0.7, 'ravi': 0.8, 'enchanté': 0.8,
+                'comblé': 0.7, 'réjoui': 0.7, 'enthousiaste': 0.8, 'optimiste': 0.6,
+                
+                # Qualité et performance
+                'bon': 0.5, 'bien': 0.5, 'mieux': 0.6, 'meilleur': 0.7, 'top': 0.8,
+                'qualité': 0.6, 'efficace': 0.6, 'performant': 0.7, 'rapide': 0.6,
+                'fiable': 0.6, 'solide': 0.6, 'robuste': 0.6, 'stable': 0.5,
+                
+                # Recommandation et amour
+                'recommande': 0.7, 'adore': 0.8, 'aime': 0.6, 'apprécie': 0.6,
+                'préfère': 0.5, 'choisis': 0.5, 'adopte': 0.6,
+                
+                # Innovation et modernité
+                'innovant': 0.7, 'moderne': 0.5, 'nouveau': 0.4, 'révolutionnaire': 0.8,
+                'avancé': 0.6, 'sophistiqué': 0.6, 'intelligent': 0.6,
+                
+                # Service et relation client
+                'accueillant': 0.6, 'aimable': 0.6, 'courtois': 0.6, 'professionnel': 0.6,
+                'attentif': 0.6, 'réactif': 0.7, 'disponible': 0.5, 'serviable': 0.7,
+                
+                # Facilité et praticité
+                'facile': 0.6, 'simple': 0.5, 'pratique': 0.6, 'intuitif': 0.7,
+                'accessible': 0.5, 'clair': 0.5, 'évident': 0.5,
+                
+                # Argot et expressions familières
+                'cool': 0.6, 'sympa': 0.6, 'chouette': 0.6, 'super': 0.7,
+                'extra': 0.7, 'terrible': 0.8, 'mortel': 0.7, 'géniale': 0.8,
+                
+                # Intensificateurs positifs
+                'très': 0.3, 'vraiment': 0.3, 'extrêmement': 0.4, 'particulièrement': 0.3,
+            }
+        else:  # negative
+            return {
+                # Émotions négatives fortes
+                'horrible': -0.9, 'affreux': -0.9, 'terrible': -0.8, 'catastrophique': -0.9,
+                'désastreux': -0.9, 'épouvantable': -0.9, 'abominable': -0.9, 'atroce': -0.9,
+                
+                # Déception et mécontentement
+                'décevant': -0.7, 'décevante': -0.7, 'déçu': -0.6, 'mécontent': -0.6,
+                'insatisfait': -0.6, 'frustré': -0.6, 'agacé': -0.5, 'énervé': -0.6,
+                'irrité': -0.6, 'fâché': -0.6, 'en_colère': -0.7,
+                
+                # Qualité insuffisante
+                'nul': -0.8, 'mauvais': -0.6, 'médiocre': -0.6, 'pathétique': -0.8,
+                'minable': -0.8, 'pitoyable': -0.8, 'lamentable': -0.8, 'navrant': -0.7,
+                'décevant': -0.7, 'insuffisant': -0.6, 'défaillant': -0.6,
+                
+                # Problèmes techniques
+                'bug': -0.6, 'erreur': -0.5, 'problème': -0.6, 'panne': -0.7,
+                'dysfonctionnement': -0.7, 'défaut': -0.6, 'défectueux': -0.7,
+                'cassé': -0.7, 'hs': -0.7, 'inutilisable': -0.8,
+                
+                # Service client
+                'impoli': -0.7, 'désagréable': -0.6, 'irrespectueux': -0.7,
+                'incompétent': -0.7, 'négligent': -0.6, 'indifférent': -0.5,
+                'inattentif': -0.6, 'lent': -0.5, 'retard': -0.5,
+                
+                # Argot et expressions familières
+                'naze': -0.7, 'pourri': -0.8, 'foireux': -0.8, 'merdique': -0.9,
+                'craignos': -0.7, 'bidon': -0.6, 'arnaque': -0.8,
+                
+                # Intensité et gravité
+                'grave': -0.6, 'sérieux': -0.5, 'important': -0.4, 'majeur': -0.6,
+                'critique': -0.7, 'urgent': -0.5, 'inquiétant': -0.6,
+                
+                # Regret et déception
+                'regrette': -0.6, 'dommage': -0.5, 'hélas': -0.5, 'malheureusement': -0.4,
+                
+                # Négation et refus
+                'refuse': -0.6, 'rejette': -0.6, 'évite': -0.5, 'fuis': -0.6,
+            }
     
     def _load_intensifiers(self) -> Dict[str, float]:
         """Charge les intensificateurs avec leurs coefficients"""
@@ -553,11 +504,6 @@ class RealTimeSentimentAnalyzer:
         if not cleaned_texts:
             return {}
         
-        # CORRECTION : Vérifier qu'il y a assez de contenu unique
-        if len(set(cleaned_texts)) < 2:
-            logger.warning("Pas assez de textes uniques pour TF-IDF")
-            return {}
-        
         try:
             vectorizer = TfidfVectorizer(
                 max_features=max_features,
@@ -580,23 +526,14 @@ class RealTimeSentimentAnalyzer:
             return {}
     
     def get_performance_stats(self) -> Dict[str, Any]:
-        """Retourne les statistiques de performance - CORRECTION CRITIQUE"""
-        # CORRECTION : Calcul sécurisé du nombre de mots dans le lexique
-        french_lexicon_count = 0
-        try:
-            if self.french_lexicon and hasattr(self.french_lexicon, 'positive_words') and hasattr(self.french_lexicon, 'negative_words'):
-                french_lexicon_count = len(self.french_lexicon.positive_words) + len(self.french_lexicon.negative_words)
-        except Exception as e:
-            logger.error(f"Erreur calcul stats lexique: {e}")
-            french_lexicon_count = 0
-        
+        """Retourne les statistiques de performance"""
         return {
             'cache_size': len(self.cache),
             'cache_max_size': self.cache_max_size,
             'components_loaded': {
                 'vader': self.sia is not None,
                 'lemmatizer': self.lemmatizer is not None,
-                'french_lexicon': french_lexicon_count  # CORRECTION : Valeur garantie
+                'french_lexicon': len(self.french_lexicon.positive_words) + len(self.french_lexicon.negative_words)
             }
         }
 
@@ -747,7 +684,6 @@ def main():
                 "📝 Texte Manuel", 
                 "📁 Fichier Upload", 
                 "🐦 Twitter Simulation",
-                "🐦 Twitter API Réelle",  # 🆕 NOUVEAU
                 "🔄 Temps Réel",
                 "📊 Analyse Comparative"
             ]
@@ -802,57 +738,36 @@ def main():
             handle_realtime_simulation()
         elif analysis_mode == "📊 Analyse Comparative":
             handle_comparative_analysis()
-        elif analysis_mode == "🐦 Twitter API Réelle":
-            handle_twitter_real_api()
-
-
 
 def handle_manual_text_analysis():
-    """Interface pour l'analyse de texte manuel améliorée - EXEMPLES COMPLÈTEMENT CORRIGÉS"""
+    """Interface pour l'analyse de texte manuel améliorée"""
     st.subheader("📝 Analyse de Texte Manuel")
-    
-    # Initialiser la session state pour le texte si elle n'existe pas
-    if 'current_text_to_analyze' not in st.session_state:
-        st.session_state.current_text_to_analyze = ""
     
     # Zone de saisie avec exemples
     col1, col2 = st.columns([3, 1])
     
     with col1:
-        # Le text_area utilise directement la session state
         text_input = st.text_area(
             "Entrez votre texte à analyser:",
-            value=st.session_state.current_text_to_analyze,
             height=150,
-            placeholder="Exemple: Ce service client est vraiment excellent ! Je recommande vivement cette entreprise.",
-            key="main_text_input"
+            placeholder="Exemple: Ce service client est vraiment excellent ! Je recommande vivement cette entreprise."
         )
-        
-        # Mettre à jour la session state quand l'utilisateur tape
-        if text_input != st.session_state.current_text_to_analyze:
-            st.session_state.current_text_to_analyze = text_input
     
     with col2:
         st.write("**Exemples de textes:**")
         examples = [
-            "Service client fantastique !",
-            "Très déçu de cet achat...",
-            "Produit correct, sans plus.",
-            "Interface intuitive et moderne"
+            "Service client fantastique !"
         ]
         
-        for i, example in enumerate(examples):
-            if st.button(
-                f"📝 {example[:20]}...", 
-                key=f"example_btn_{i}",
-                help=f"Cliquer pour utiliser: {example}"
-            ):
-                # Mettre à jour directement la session state
-                st.session_state.current_text_to_analyze = example
-                # Forcer le rafraîchissement
-                st.rerun()
+        for example in examples:
+            if st.button(f"📝 {example[:20]}...", key=f"example_{hash(example)}"):
+                st.session_state.example_text = example
     
-    # Boutons de contrôle
+    # Utiliser l'exemple sélectionné
+    if 'example_text' in st.session_state:
+        text_input = st.session_state.example_text
+        del st.session_state.example_text
+    
     col1, col2, col3 = st.columns([2, 1, 1])
     
     with col1:
@@ -860,223 +775,19 @@ def handle_manual_text_analysis():
     
     with col2:
         if st.button("🧹 Effacer"):
-            st.session_state.current_text_to_analyze = ""
             st.rerun()
     
     with col3:
         demo_mode = st.checkbox("Mode démo", help="Affichage détaillé pour démonstration")
     
-    # Debug info (temporaire pour vérifier)
-    with st.expander("🔍 Debug Info"):
-        st.write(f"**text_input:** `{repr(text_input)}`")
-        st.write(f"**session_state:** `{repr(st.session_state.current_text_to_analyze)}`")
-        st.write(f"**Longueur text_input:** {len(text_input) if text_input else 0}")
-        st.write(f"**Longueur session_state:** {len(st.session_state.current_text_to_analyze)}")
-    
-    # Analyse du texte - Utiliser la session state comme source de vérité
-    current_text = st.session_state.current_text_to_analyze.strip()
-    
-    if analyze_btn:
-        if current_text:
-            with st.spinner("Analyse en cours..."):
-                try:
-                    st.info(f"🔍 Analyse du texte: '{current_text}'")  # Debug temporaire
-                    result = analyzer.analyze_sentiment_comprehensive(current_text)
-                    display_single_analysis_result(result, demo_mode)
-                except Exception as e:
-                    st.error(f"Erreur lors de l'analyse: {e}")
-                    logger.error(f"Erreur analyse manuelle: {e}")
-        else:
-            st.warning("⚠️ Veuillez entrer un texte à analyser")
-            st.info("💡 Cliquez sur un exemple ou tapez votre texte dans la zone ci-dessus")
-
-def display_single_analysis_result(result: SentimentResult, demo_mode: bool = False):
-    """Affiche le résultat d'une analyse unique avec mode démo et RADAR AMÉLIORÉ"""
-    consensus = result.consensus
-    
-    # Métriques principales avec design amélioré
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        sentiment_color = "🟢" if consensus['classification'] == 'Positif' else "🔴" if consensus['classification'] == 'Négatif' else "🟡"
-        st.metric("Sentiment Final", f"{sentiment_color} {consensus['classification']}")
-    
-    with col2:
-        score_delta = "+" if consensus['score'] > 0 else ""
-        st.metric("Score Consensus", f"{consensus['score']:.3f}", delta=f"{score_delta}{consensus['score']:.3f}")
-    
-    with col3:
-        confidence_color = "🟢" if result.confidence in ["Très élevée", "Élevée"] else "🟡" if result.confidence == "Moyenne" else "🔴"
-        st.metric("Confiance", f"{confidence_color} {result.confidence}")
-    
-    with col4:
-        st.metric("Mots Analysés", f"{result.french_lexicon_scores.get('word_count', 0)}")
-    
-    # NOUVEAU : Radar chart TOUJOURS affiché avec surfaces comme votre exemple
-    st.subheader("📡 Comparaison des Méthodes d'Analyse")
-    
-    # Préparer les données pour le radar avec surfaces
-    categories = ['VADER\n(Réseaux sociaux)', 'TextBlob\n(Linguistique)', 'Lexique FR\n(Français)', 'Consensus\n(Final)']
-    
-    # Normaliser les scores pour le radar (valeurs absolues, échelle 0-1)
-    scores_raw = [
-        result.vader_scores['compound'],
-        result.textblob_scores['polarity'],
-        result.french_lexicon_scores['compound'],
-        result.consensus['score']
-    ]
-    
-    # Convertir en valeurs absolues et normaliser sur 0-100 pour l'affichage
-    scores_display = [abs(score) * 100 for score in scores_raw]
-    
-    # Créer le graphique radar avec surfaces
-    fig = go.Figure()
-    
-    # Ajouter la trace principale avec surface remplie
-    fig.add_trace(go.Scatterpolar(
-        r=scores_display,
-        theta=categories,
-        fill='toself',
-        name=f'Analyse: {consensus["classification"]}',
-        line=dict(color='rgba(59, 130, 246, 0.8)', width=3),  # Bleu
-        fillcolor='rgba(59, 130, 246, 0.3)',  # Bleu transparent
-        marker=dict(size=8, color='rgba(59, 130, 246, 1)')
-    ))
-    
-    # Ajouter une ligne de référence neutre
-    neutral_scores = [50] * len(categories)  # 50 = neutre sur l'échelle 0-100
-    fig.add_trace(go.Scatterpolar(
-        r=neutral_scores,
-        theta=categories,
-        fill='toself',
-        name='Référence Neutre',
-        line=dict(color='rgba(156, 163, 175, 0.6)', width=2, dash='dash'),
-        fillcolor='rgba(156, 163, 175, 0.1)',
-        marker=dict(size=5, color='rgba(156, 163, 175, 0.8)')
-    ))
-    
-    # Configuration du radar
-    fig.update_layout(
-        polar=dict(
-            radialaxis=dict(
-                visible=True,
-                range=[0, 100],
-                tickvals=[0, 25, 50, 75, 100],
-                ticktext=['0%', '25%', '50%', '75%', '100%'],
-                gridcolor='rgba(156, 163, 175, 0.3)',
-                tickfont=dict(size=10)
-            ),
-            angularaxis=dict(
-                gridcolor='rgba(156, 163, 175, 0.3)',
-                tickfont=dict(size=11)
-            )
-        ),
-        showlegend=True,
-        title=dict(
-            text=f"📊 Intensité par Méthode - Score final: {consensus['score']:.3f}",
-            x=0.5,
-            font=dict(size=16)
-        ),
-        height=500,
-        paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(0,0,0,0)'
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
-    
-    # Tableau détaillé des scores
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("**📊 Scores Détaillés:**")
-        scores_df = pd.DataFrame({
-            'Méthode': ['VADER', 'TextBlob', 'Lexique FR', 'Consensus'],
-            'Score': scores_raw,
-            'Intensité (%)': [f"{abs(score)*100:.1f}%" for score in scores_raw],
-            'Classification': [
-                'Positif' if score > 0.1 else 'Négatif' if score < -0.1 else 'Neutre'
-                for score in scores_raw
-            ]
-        })
-        st.dataframe(scores_df, hide_index=True)
-    
-    with col2:
-        st.markdown("**🎯 Interprétation:**")
-        if abs(consensus['score']) > 0.5:
-            st.success(f"🔸 **Sentiment fort** ({consensus['classification']})")
-        elif abs(consensus['score']) > 0.2:
-            st.info(f"🔸 **Sentiment modéré** ({consensus['classification']})")
-        else:
-            st.warning("🔸 **Sentiment faible/neutre**")
-        
-        # Analyse de la cohérence
-        variance = np.var(scores_raw)
-        if variance < 0.1:
-            st.success("✅ **Cohérence élevée** entre méthodes")
-        elif variance < 0.3:
-            st.info("⚠️ **Cohérence moyenne** entre méthodes")
-        else:
-            st.warning("❌ **Divergence** notable entre méthodes")
-    
-    if demo_mode:
-        # Détails par méthode en mode démo
-        st.subheader("🔍 Analyse Détaillée par Méthode")
-        
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            st.markdown("### 🇺🇸 VADER")
-            st.markdown(f"**Positif:** {result.vader_scores['pos']:.2%}")
-            st.markdown(f"**Négatif:** {result.vader_scores['neg']:.2%}")
-            st.markdown(f"**Neutre:** {result.vader_scores['neu']:.2%}")
-            st.markdown(f"**Score:** {result.vader_scores['compound']:.3f}")
-        
-        with col2:
-            st.markdown("### 🧠 TextBlob")
-            st.markdown(f"**Polarité:** {result.textblob_scores['polarity']:.3f}")
-            st.markdown(f"**Subjectivité:** {result.textblob_scores['subjectivity']:.3f}")
-            polarity_text = "Positif" if result.textblob_scores['polarity'] > 0.1 else "Négatif" if result.textblob_scores['polarity'] < -0.1 else "Neutre"
-            st.markdown(f"**Classification:** {polarity_text}")
-        
-        with col3:
-            st.markdown("### 🇫🇷 Lexique Français")
-            st.markdown(f"**Positif:** {result.french_lexicon_scores['positive']:.2%}")
-            st.markdown(f"**Négatif:** {result.french_lexicon_scores['negative']:.2%}")
-            st.markdown(f"**Score:** {result.french_lexicon_scores['compound']:.3f}")
-            st.markdown(f"**Classification:** {result.french_lexicon_scores['classification']}")
-    
-    # Texte préprocessé - avec clés uniques
-    with st.expander("🔍 Détails du Préprocessing"):
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown("**Texte Original:**")
-            st.text_area(
-                "", 
-                value=result.text, 
-                height=100, 
-                disabled=True, 
-                key=f"original_text_{hash(result.text)}"
-            )
-        
-        with col2:
-            st.markdown("**Texte Nettoyé:**")
-            st.text_area(
-                "", 
-                value=result.cleaned_text, 
-                height=100, 
-                disabled=True, 
-                key=f"cleaned_text_{hash(result.cleaned_text)}"
-            )
-        
-        if result.metadata:
-            st.markdown("**Métadonnées:**")
-            st.json(result.metadata)
-
-
-
-
-
+    if analyze_btn and text_input:
+        with st.spinner("Analyse en cours..."):
+            try:
+                result = analyzer.analyze_sentiment_comprehensive(text_input)
+                display_single_analysis_result(result, demo_mode)
+            except Exception as e:
+                st.error(f"Erreur lors de l'analyse: {e}")
+                logger.error(f"Erreur analyse manuelle: {e}")
 
 def handle_file_upload_analysis():
     """Interface pour l'analyse de fichiers améliorée"""
@@ -1253,7 +964,7 @@ Prix un peu élevé mais ça vaut le coup.""",
                 st.plotly_chart(fig_corr, use_container_width=True)
 
 def display_single_analysis_result(result: SentimentResult, demo_mode: bool = False):
-    """Affiche le résultat d'une analyse unique avec mode démo - CORRIGÉ"""
+    """Affiche le résultat d'une analyse unique avec mode démo"""
     consensus = result.consensus
     
     # Métriques principales avec design amélioré
@@ -1282,9 +993,9 @@ def display_single_analysis_result(result: SentimentResult, demo_mode: bool = Fa
         
         with col1:
             st.markdown("### 🇺🇸 VADER")
-            st.markdown(f"**Positif:** {result.vader_scores['pos']:.2%}")
-            st.markdown(f"**Négatif:** {result.vader_scores['neg']:.2%}")
-            st.markdown(f"**Neutre:** {result.vader_scores['neu']:.2%}")
+            st.markdown(f"**Positif:** {result.vader_scores['positive']:.2%}")
+            st.markdown(f"**Négatif:** {result.vader_scores['negative']:.2%}")
+            st.markdown(f"**Neutre:** {result.vader_scores['neutral']:.2%}")
             st.markdown(f"**Score:** {result.vader_scores['compound']:.3f}")
         
         with col2:
@@ -1331,29 +1042,17 @@ def display_single_analysis_result(result: SentimentResult, demo_mode: bool = Fa
         
         st.plotly_chart(fig, use_container_width=True)
     
-    # Texte préprocessé - CORRECTION : Ajout des clés uniques
+    # Texte préprocessé
     with st.expander("🔍 Détails du Préprocessing"):
         col1, col2 = st.columns(2)
         
         with col1:
             st.markdown("**Texte Original:**")
-            st.text_area(
-                "", 
-                value=result.text, 
-                height=100, 
-                disabled=True, 
-                key=f"original_text_{hash(result.text)}"  # ✅ Clé unique basée sur le contenu
-            )
+            st.text_area("", value=result.text, height=100, disabled=True)
         
         with col2:
             st.markdown("**Texte Nettoyé:**")
-            st.text_area(
-                "", 
-                value=result.cleaned_text, 
-                height=100, 
-                disabled=True, 
-                key=f"cleaned_text_{hash(result.cleaned_text)}"  # ✅ Clé unique basée sur le contenu
-            )
+            st.text_area("", value=result.cleaned_text, height=100, disabled=True)
         
         if result.metadata:
             st.markdown("**Métadonnées:**")
@@ -1561,7 +1260,7 @@ def display_smart_alerts(results: List[SentimentResult]):
         st.info("✅ Aucune alerte - Les résultats semblent équilibrés")
 
 def create_advanced_visualizations(results: List[SentimentResult]):
-    """Crée des visualisations avancées - CORRECTION BUG CRITIQUE"""
+    """Crée des visualisations avancées"""
     st.subheader("📈 Visualisations Avancées")
     
     # Préparer les données
@@ -1591,22 +1290,6 @@ def create_advanced_visualizations(results: List[SentimentResult]):
                 df, 
                 names='classification',
                 title="🥧 Distribution des Sentiments",
-                color_discrete_map={
-                    'Positif': '#28a745',
-                    'Négatif': '#dc3545',
-                    'Neutre': '#6c757d'
-                }
-            )
-            st.plotly_chart(fig_pie, use_container_width=True)
-        
-        with col2:
-            # Histogramme des scores - CORRECTION : Créer la figure ici
-            fig_hist = px.histogram(
-                df,
-                x='score',
-                color='classification',
-                title="📊 Distribution des Scores",
-                nbins=20,
                 color_discrete_map={
                     'Positif': '#28a745',
                     'Négatif': '#dc3545',
@@ -1740,29 +1423,25 @@ def display_keyword_analysis(results: List[SentimentResult]):
             # Nuage de mots
             st.markdown("**☁️ Nuage de Mots**")
             try:
-                # CORRECTION : Vérification robuste avant WordCloud
-                if len(keywords) > 5:  # Au moins 5 mots pour un nuage viable
-                    wordcloud = WordCloud(
-                        width=500, 
-                        height=400, 
-                        background_color='white',
-                        colormap='viridis',
-                        max_words=50,
-                        relative_scaling=0.5,
-                        min_font_size=10
-                    ).generate_from_frequencies(keywords)
-                    
-                    # Convertir en image pour Streamlit
-                    img_buffer = io.BytesIO()
-                    wordcloud.to_image().save(img_buffer, format='PNG')
-                    img_str = base64.b64encode(img_buffer.getvalue()).decode()
-                    
-                    st.markdown(
-                        f'<img src="data:image/png;base64,{img_str}" style="width:100%">',
-                        unsafe_allow_html=True
-                    )
-                else:
-                    st.info("Pas assez de mots-clés uniques pour générer un nuage")
+                wordcloud = WordCloud(
+                    width=500, 
+                    height=400, 
+                    background_color='white',
+                    colormap='viridis',
+                    max_words=50,
+                    relative_scaling=0.5,
+                    min_font_size=10
+                ).generate_from_frequencies(keywords)
+                
+                # Convertir en image pour Streamlit
+                img_buffer = io.BytesIO()
+                wordcloud.to_image().save(img_buffer, format='PNG')
+                img_str = base64.b64encode(img_buffer.getvalue()).decode()
+                
+                st.markdown(
+                    f'<img src="data:image/png;base64,{img_str}" style="width:100%">',
+                    unsafe_allow_html=True
+                )
             except Exception as e:
                 st.error(f"Impossible de générer le nuage de mots: {e}")
         
@@ -1784,18 +1463,10 @@ def display_keyword_analysis(results: List[SentimentResult]):
         if term_sentiment_data:
             df_terms = pd.DataFrame(term_sentiment_data)
             
-            # CORRECTION : Gestion sécurisée du Counter
-            def safe_dominant_class(classifications):
-                if not classifications or len(classifications) == 0:
-                    return 'Neutre'
-                counter = Counter(classifications)
-                most_common = counter.most_common(1)
-                return most_common[0][0] if most_common else 'Neutre'
-            
             # Agrégation par terme
             correlation_df = df_terms.groupby('term').agg({
                 'sentiment_score': ['mean', 'count', 'std'],
-                'classification': safe_dominant_class
+                'classification': lambda x: Counter(x).most_common(1)[0][0]
             }).round(3)
             
             correlation_df.columns = ['avg_sentiment', 'frequency', 'std_sentiment', 'dominant_class']
@@ -1929,165 +1600,6 @@ def handle_twitter_analysis():
                     display_social_media_results(results, search_term, platform)
                 else:
                     st.error("Aucun message n'a pu être analysé")
-
-def handle_twitter_real_api():
-    """Interface pour l'analyse Twitter avec vraie API - AVEC CONFIGURATION"""
-    st.subheader("🐦 Analyse Twitter (API Réelle)")
-    
-    # Section configuration API
-    with st.expander("🔑 Configuration API Twitter (Cliquez ici d'abord)", expanded=True):
-        st.markdown("""
-        **Pour utiliser cette fonctionnalité, vous avez besoin d'un compte développeur Twitter :**
-        1. 📝 Créez un compte sur [developer.twitter.com](https://developer.twitter.com)
-        2. 🆕 Créez une nouvelle App
-        3. 🔑 Récupérez votre Bearer Token
-        """)
-        
-        bearer_token = st.text_input(
-            "Bearer Token Twitter:", 
-            type="password",
-            placeholder="Collez votre Bearer Token ici...",
-            help="Disponible dans votre dashboard Twitter Developer"
-        )
-        
-        if bearer_token:
-            st.success("🔑 Token saisi ! Vous pouvez maintenant analyser.")
-            # Sauvegarder dans session state
-            st.session_state.twitter_bearer_token = bearer_token
-        else:
-            st.info("💡 **Mode démo disponible** - Vous pouvez tester sans token d'abord")
-    
-    # Interface de recherche
-    col1, col2, col3 = st.columns([2, 1, 1])
-    
-    with col1:
-        search_term = st.text_input(
-            "Terme de recherche:",
-            value="Python",
-            placeholder="Entrez une marque, hashtag ou mot-clé"
-        )
-    
-    with col2:
-        tweet_count = st.selectbox("Nombre de tweets", [10, 25, 50], index=0)
-    
-    with col3:
-        mode = st.selectbox("Mode", ["🔧 Démo (fake data)", "🌐 API Réelle"])
-    
-    # Bouton d'analyse
-    if st.button("🔍 Analyser les Tweets", type="primary"):
-        if mode == "🔧 Démo (fake data)":
-            # Mode démo - utilise des données simulées
-            st.info(f"🔧 **Mode démo** - Simulation de {tweet_count} tweets pour '{search_term}'")
-            demo_tweets = generate_demo_tweets(search_term, tweet_count)
-            analyze_demo_tweets(demo_tweets, search_term)
-            
-    elif mode == "🌐 API Réelle":
-        # Mode API réelle
-        if not st.session_state.get('twitter_bearer_token'):
-            st.error("⚠️ Veuillez d'abord configurer votre Bearer Token ci-dessus")
-        else:
-            with st.spinner(f"🌐 Connexion à Twitter pour '{search_term}'..."):
-                # Appel API réel
-                tweets, error = fetch_real_twitter_data(
-                    search_term, 
-                    tweet_count, 
-                    st.session_state.twitter_bearer_token
-                )
-                
-                if error:
-                    st.error(error)
-                elif not tweets:
-                    st.warning(f"Aucun tweet trouvé pour '{search_term}' (essayez un terme plus populaire)")
-                else:
-                    st.success(f"✅ {len(tweets)} tweets réels récupérés !")
-                    
-                    # Analyser avec VOTRE système existant
-                    results = []
-                    progress_bar = st.progress(0)
-                    
-                    for i, tweet in enumerate(tweets):
-                        result = analyzer.analyze_sentiment_comprehensive(tweet['text'])
-                        result.metadata = {
-                            'platform': 'Twitter (API)',
-                            'tweet_id': tweet['id'],
-                            'created_at': tweet['created_at'],
-                            'public_metrics': tweet['public_metrics'],
-                            'real_data': True
-                        }
-                        results.append(result)
-                        progress_bar.progress((i + 1) / len(tweets))
-                    
-                    progress_bar.empty()
-                    
-                    # Utiliser VOTRE fonction d'affichage existante !
-                    display_social_media_results(results, search_term, "Twitter (API)")
-                    
-                    # Bonus : Afficher quelques tweets sources
-                    with st.expander(f"📝 Exemples de tweets analysés"):
-                        for i, tweet in enumerate(tweets[:3]):  # 3 premiers
-                            st.text_area(
-                                f"Tweet {i+1}:", 
-                                value=tweet['text'], 
-                                height=80, 
-                                disabled=True,
-                                key=f"real_tweet_{i}"
-                            )
-
-
-
-
-
-
-
-
-def generate_demo_tweets(term, count):
-    """Génère des tweets de démo pour tester l'interface"""
-    demo_tweets = [
-        f"J'adore utiliser {term} ! C'est vraiment fantastique 😊",
-        f"{term} est décevant... problèmes constants 😞",
-        f"Test de {term} en cours, on verra bien",
-        f"{term} fonctionne parfaitement, je recommande !",
-        f"Problème avec {term} aujourd'hui, très frustrant",
-    ]
-    
-    # Répéter pour atteindre le count demandé
-    result = []
-    for i in range(count):
-        tweet = demo_tweets[i % len(demo_tweets)]
-        result.append({
-            'text': tweet,
-            'id': f'demo_{i}',
-            'created_at': datetime.now(),
-            'public_metrics': {'like_count': np.random.randint(0, 100)}
-        })
-    
-    return result
-
-def analyze_demo_tweets(tweets, search_term):
-    """Analyse les tweets de démo avec votre système existant"""
-    st.success(f"✅ Analyse de {len(tweets)} tweets de démo terminée")
-    
-    # Utiliser VOTRE système d'analyse existant
-    results = []
-    progress_bar = st.progress(0)
-    
-    for i, tweet in enumerate(tweets):
-        result = analyzer.analyze_sentiment_comprehensive(tweet['text'])
-        result.metadata = {
-            'platform': 'Twitter (Démo)',
-            'tweet_id': tweet['id'],
-            'created_at': tweet['created_at'],
-            'demo_mode': True
-        }
-        results.append(result)
-        progress_bar.progress((i + 1) / len(tweets))
-    
-    progress_bar.empty()
-    
-    # Utiliser VOTRE fonction d'affichage existante !
-    display_social_media_results(results, search_term, "Twitter (Démo)")
-
-
 
 def generate_realistic_social_media_data(term: str, count: int, platform: str, bias: float = 0.0, 
                                        include_hashtags: bool = True, include_mentions: bool = True) -> List[Dict]:
@@ -2284,8 +1796,295 @@ def display_social_media_results(results: List[SentimentResult], search_term: st
             delta=f"{score_trend}"
         )
     
-    # Affichage simplifié pour les réseaux sociaux
-    display_batch_analysis_results(results, {'platform': platform, 'search_term': search_term})
+    # Alertes spécifiques aux réseaux sociaux
+    display_social_media_alerts(results, search_term, platform)
+    
+    # Dashboard avec onglets
+    tab1, tab2, tab3, tab4 = st.tabs(["📊 Vue d'ensemble", "⏰ Tendances", "#️⃣ Hashtags", "📋 Messages"])
+    
+    with tab1:
+        display_batch_analysis_results(results, {'platform': platform, 'search_term': search_term})
+    
+    with tab2:
+        display_temporal_analysis(results)
+    
+    with tab3:
+        display_hashtag_analysis(results)
+    
+    with tab4:
+        display_message_details(results, platform)
+
+def display_social_media_alerts(results: List[SentimentResult], search_term: str, platform: str):
+    """Alertes spécifiques aux réseaux sociaux"""
+    st.subheader(f"🚨 Alertes {platform}")
+    
+    classifications = [r.consensus['classification'] for r in results]
+    negative_ratio = classifications.count('Négatif') / len(results)
+    
+    alerts = []
+    
+    # Alertes spécifiques par plateforme
+    if platform == "Twitter":
+        if negative_ratio > 0.5:
+            alerts.append({
+                'type': 'error',
+                'message': f"🐦 CRISE POTENTIELLE sur Twitter: {negative_ratio:.1%} de tweets négatifs pour '{search_term}'"
+            })
+        elif negative_ratio > 0.3:
+            alerts.append({
+                'type': 'warning',
+                'message': f"⚠️ Surveillance recommandée: {negative_ratio:.1%} de sentiments négatifs sur Twitter"
+            })
+    
+    elif platform == "Facebook":
+        if negative_ratio > 0.4:
+            alerts.append({
+                'type': 'warning',
+                'message': f"📘 Attention Facebook: {negative_ratio:.1%} de posts négatifs - Impact sur l'engagement possible"
+            })
+    
+    elif platform == "LinkedIn":
+        if negative_ratio > 0.3:
+            alerts.append({
+                'type': 'warning',
+                'message': f"💼 Image professionnelle: {negative_ratio:.1%} de posts négatifs sur LinkedIn"
+            })
+    
+    # Recommandations
+    if negative_ratio > 0.4:
+        alerts.append({
+            'type': 'info',
+            'message': f"💡 Recommandation: Réponse proactive nécessaire sur {platform} pour '{search_term}'"
+        })
+    
+    # Afficher les alertes
+    for alert in alerts:
+        if alert['type'] == 'error':
+            st.error(alert['message'])
+        elif alert['type'] == 'warning':
+            st.warning(alert['message'])
+        else:
+            st.info(alert['message'])
+
+def display_temporal_analysis(results: List[SentimentResult]):
+    """Analyse temporelle avancée"""
+    if len(results) < 2:
+        st.info("Plus de données nécessaires pour l'analyse temporelle")
+        return
+    
+    # Simuler des timestamps répartis sur la période
+    now = datetime.now()
+    time_span = timedelta(hours=6)  # 6 heures de données
+    
+    for i, result in enumerate(results):
+        # Répartir les timestamps de façon réaliste
+        time_offset = (i / len(results)) * time_span
+        result.timestamp = now - time_span + time_offset
+    
+    # Créer DataFrame temporel
+    df_time = pd.DataFrame([
+        {
+            'timestamp': r.timestamp,
+            'score': r.consensus['score'],
+            'classification': r.consensus['classification'],
+            'hour': r.timestamp.hour,
+            'minute_group': r.timestamp.minute // 15  # Groupes de 15 minutes
+        }
+        for r in results
+    ])
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Évolution temporelle
+        fig_timeline = px.scatter(
+            df_time,
+            x='timestamp',
+            y='score',
+            color='classification',
+            title="⏰ Évolution Temporelle des Sentiments",
+            color_discrete_map={
+                'Positif': '#28a745',
+                'Négatif': '#dc3545',
+                'Neutre': '#6c757d'
+            },
+            trendline="lowess"
+        )
+        fig_timeline.add_hline(y=0, line_dash="dash", line_color="gray")
+        st.plotly_chart(fig_timeline, use_container_width=True)
+    
+    with col2:
+        # Distribution par heure
+        hourly_sentiment = df_time.groupby(['hour', 'classification']).size().reset_index(name='count')
+        
+        fig_hourly = px.bar(
+            hourly_sentiment,
+            x='hour',
+            y='count',
+            color='classification',
+            title="📊 Volume par Heure",
+            color_discrete_map={
+                'Positif': '#28a745',
+                'Négatif': '#dc3545',
+                'Neutre': '#6c757d'
+            }
+        )
+        st.plotly_chart(fig_hourly, use_container_width=True)
+
+def display_hashtag_analysis(results: List[SentimentResult]):
+    """Analyse des hashtags et mentions"""
+    hashtags_data = []
+    mentions_data = []
+    
+    for result in results:
+        if result.metadata and 'hashtags' in result.metadata:
+            for hashtag in result.metadata['hashtags']:
+                hashtags_data.append({
+                    'hashtag': hashtag,
+                    'sentiment': result.consensus['classification'],
+                    'score': result.consensus['score']
+                })
+        
+        if result.metadata and 'mentions' in result.metadata:
+            for mention in result.metadata['mentions']:
+                mentions_data.append({
+                    'mention': mention,
+                    'sentiment': result.consensus['classification'],
+                    'score': result.consensus['score']
+                })
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if hashtags_data:
+            st.markdown("**#️⃣ Analyse des Hashtags**")
+            hashtags_df = pd.DataFrame(hashtags_data)
+            hashtag_summary = hashtags_df.groupby('hashtag').agg({
+                'score': 'mean',
+                'sentiment': lambda x: Counter(x).most_common(1)[0][0]
+            }).round(3)
+            hashtag_summary['count'] = hashtags_df['hashtag'].value_counts()
+            hashtag_summary = hashtag_summary.sort_values('count', ascending=False).head(10)
+            
+            fig_hashtags = px.bar(
+                hashtag_summary.reset_index(),
+                x='count',
+                y='hashtag',
+                color='score',
+                orientation='h',
+                title="Top Hashtags par Fréquence",
+                color_continuous_scale='RdYlGn',
+                hover_data=['sentiment']
+            )
+            st.plotly_chart(fig_hashtags, use_container_width=True)
+        else:
+            st.info("Aucun hashtag trouvé dans les données")
+    
+    with col2:
+        if mentions_data:
+            st.markdown("**👤 Analyse des Mentions**")
+            mentions_df = pd.DataFrame(mentions_data)
+            mention_summary = mentions_df.groupby('mention').agg({
+                'score': 'mean',
+                'sentiment': lambda x: Counter(x).most_common(1)[0][0]
+            }).round(3)
+            mention_summary['count'] = mentions_df['mention'].value_counts()
+            mention_summary = mention_summary.sort_values('count', ascending=False).head(10)
+            
+            fig_mentions = px.bar(
+                mention_summary.reset_index(),
+                x='count',
+                y='mention',
+                color='score',
+                orientation='h',
+                title="Top Mentions par Fréquence",
+                color_continuous_scale='RdYlGn',
+                hover_data=['sentiment']
+            )
+            st.plotly_chart(fig_mentions, use_container_width=True)
+        else:
+            st.info("Aucune mention trouvée dans les données")
+
+def display_message_details(results: List[SentimentResult], platform: str):
+    """Affiche les détails des messages avec filtres avancés"""
+    
+    # Filtres avancés
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        sentiment_filter = st.selectbox("Sentiment", ["Tous", "Positif", "Négatif", "Neutre"], key="msg_sentiment")
+    
+    with col2:
+        confidence_filter = st.selectbox("Confiance", ["Toutes", "Très élevée", "Élevée", "Moyenne", "Faible"], key="msg_confidence")
+    
+    with col3:
+        score_range = st.slider("Plage de scores", -1.0, 1.0, (-1.0, 1.0), step=0.1, key="msg_score")
+    
+    with col4:
+        sort_option = st.selectbox("Trier par", ["Timestamp", "Score", "Longueur", "Confiance"], key="msg_sort")
+    
+    # Appliquer les filtres
+    filtered_results = results.copy()
+    
+    if sentiment_filter != "Tous":
+        filtered_results = [r for r in filtered_results if r.consensus['classification'] == sentiment_filter]
+    
+    if confidence_filter != "Toutes":
+        filtered_results = [r for r in filtered_results if r.confidence == confidence_filter]
+    
+    filtered_results = [r for r in filtered_results if score_range[0] <= r.consensus['score'] <= score_range[1]]
+    
+    # Tri
+    if sort_option == "Score":
+        filtered_results.sort(key=lambda x: x.consensus['score'], reverse=True)
+    elif sort_option == "Longueur":
+        filtered_results.sort(key=lambda x: len(x.text), reverse=True)
+    elif sort_option == "Confiance":
+        confidence_order = {"Très élevée": 4, "Élevée": 3, "Moyenne": 2, "Faible": 1}
+        filtered_results.sort(key=lambda x: confidence_order.get(x.confidence, 0), reverse=True)
+    else:  # Timestamp
+        filtered_results.sort(key=lambda x: x.timestamp, reverse=True)
+    
+    st.write(f"**📋 {len(filtered_results)} messages filtrés sur {len(results)} total**")
+    
+    # Affichage des messages
+    for i, result in enumerate(filtered_results[:50]):  # Limite à 50 pour la performance
+        with st.expander(f"{i+1}. {result.consensus['classification']} - Score: {result.consensus['score']:.3f} - {result.timestamp.strftime('%H:%M:%S')}"):
+            col1, col2 = st.columns([3, 1])
+            
+            with col1:
+                st.markdown(f"**Message:** {result.text}")
+                
+                # Métadonnées si disponibles
+                if result.metadata:
+                    if result.metadata.get('hashtags'):
+                        st.markdown(f"**Hashtags:** {', '.join(result.metadata['hashtags'])}")
+                    if result.metadata.get('mentions'):
+                        st.markdown(f"**Mentions:** {', '.join(result.metadata['mentions'])}")
+            
+            with col2:
+                st.markdown(f"**Plateforme:** {platform}")
+                st.markdown(f"**Confiance:** {result.confidence}")
+                st.markdown(f"**Longueur:** {len(result.text)} caractères")
+                
+                # Mini-graphique des scores
+                scores_data = {
+                    'VADER': result.vader_scores['compound'],
+                    'TextBlob': result.textblob_scores['polarity'],
+                    'Français': result.french_lexicon_scores['compound']
+                }
+                
+                fig_mini = go.Figure(data=[
+                    go.Bar(x=list(scores_data.keys()), y=list(scores_data.values()))
+                ])
+                fig_mini.update_layout(
+                    height=200,
+                    showlegend=False,
+                    margin=dict(l=0, r=0, t=20, b=0),
+                    title="Scores par méthode"
+                )
+                fig_mini.add_hline(y=0, line_dash="dash", line_color="gray")
+                st.plotly_chart(fig_mini, use_container_width=True)
 
 def handle_realtime_simulation():
     """Interface pour la simulation temps réel améliorée"""
@@ -2310,9 +2109,6 @@ def handle_realtime_simulation():
     if show_live_charts:
         metrics_container = st.empty()
         chart_container = st.empty()
-    else:
-        metrics_container = None
-        chart_container = None
     
     messages_container = st.empty()
     
@@ -2340,15 +2136,15 @@ def handle_realtime_simulation():
             max_messages, 
             message_source, 
             auto_sentiment_bias,
-            metrics_container,
-            chart_container,
+            metrics_container if show_live_charts else None,
+            chart_container if show_live_charts else None,
             messages_container,
             save_simulation
         )
 
 def run_realtime_simulation(speed: int, max_msg: int, source: str, auto_bias: bool,
                           metrics_container, chart_container, messages_container, save_sim: bool):
-    """Execute la simulation temps réel - CORRECTION BOUCLE INFINIE"""
+    """Execute la simulation temps réel"""
     
     # Données d'exemple étendues
     sample_messages = [
@@ -2374,7 +2170,7 @@ def run_realtime_simulation(speed: int, max_msg: int, source: str, auto_bias: bo
     results = st.session_state.get('simulation_results', [])
     message_count = 0
     
-    # CORRECTION : Boucle avec protection contre l'infini
+    # Boucle de simulation
     while (st.session_state.get('simulation_active', False) and 
            message_count < max_msg):
         
@@ -2419,15 +2215,12 @@ def run_realtime_simulation(speed: int, max_msg: int, source: str, auto_bias: bo
             
             update_messages_display(results[-10:], messages_container)  # 10 derniers messages
             
-            # CORRECTION CRITIQUE : Toujours incrémenter message_count
             message_count += 1
             time.sleep(speed)
             
         except Exception as e:
             st.error(f"Erreur dans la simulation: {e}")
             st.session_state.simulation_active = False
-            # CORRECTION : Incrémenter même en cas d'erreur pour éviter la boucle infinie
-            message_count += 1
             break
     
     # Fin de simulation
@@ -2625,6 +2418,10 @@ def save_simulation_results(results: List[SentimentResult]):
     except Exception as e:
         st.error(f"Erreur lors de la sauvegarde: {e}")
 
+
+
+
+
 def check_system_health() -> Dict[str, Any]:
     """Vérifie la santé du système et des composants"""
     health_status = {
@@ -2648,9 +2445,7 @@ def check_system_health() -> Dict[str, Any]:
                 health_status['issues'].append("VADER n'est pas chargé correctement")
                 health_status['healthy'] = False
             
-            # CORRECTION : Seuil ajusté et vérification robuste
-            french_lexicon_count = stats['components_loaded']['french_lexicon']
-            if french_lexicon_count < 100:  # Seuil réaliste
+            if stats['components_loaded']['french_lexicon'] < 1000:
                 health_status['issues'].append("Lexique français incomplet")
                 health_status['healthy'] = False
         else:
@@ -2658,21 +2453,21 @@ def check_system_health() -> Dict[str, Any]:
             health_status['healthy'] = False
         
         # Vérification de la mémoire disponible
-        try:
-            import psutil
-            memory_percent = psutil.virtual_memory().percent
-            if memory_percent > 90:
-                health_status['issues'].append(f"Mémoire critique: {memory_percent}% utilisée")
-                health_status['healthy'] = False
-            
-            health_status['components']['memory'] = {
-                'status': 'OK' if memory_percent < 80 else 'WARNING' if memory_percent < 90 else 'CRITICAL',
-                'usage_percent': memory_percent
-            }
-        except ImportError:
-            # psutil n'est pas disponible, continuer sans vérification mémoire
-            health_status['components']['memory'] = {'status': 'UNAVAILABLE'}
+        import psutil
+        memory_percent = psutil.virtual_memory().percent
+        if memory_percent > 90:
+            health_status['issues'].append(f"Mémoire critique: {memory_percent}% utilisée")
+            health_status['healthy'] = False
         
+        health_status['components']['memory'] = {
+            'status': 'OK' if memory_percent < 80 else 'WARNING' if memory_percent < 90 else 'CRITICAL',
+            'usage_percent': memory_percent
+        }
+        
+    except ImportError:
+        # psutil n'est pas disponible, continuer sans vérification mémoire
+        health_status['components']['memory'] = {'status': 'UNAVAILABLE'}
+    
     except Exception as e:
         health_status['issues'].append(f"Erreur lors de la vérification: {e}")
         health_status['healthy'] = False
@@ -2689,6 +2484,9 @@ def display_system_diagnostics():
     with col1:
         st.markdown("**🖥️ Informations Système**")
         try:
+            import platform
+            import sys
+            
             system_info = {
                 "OS": platform.system(),
                 "Version OS": platform.version(),
@@ -2841,6 +2639,7 @@ def generate_error_report(error: Exception) -> str:
     """Génère un rapport d'erreur détaillé pour le debugging"""
     
     import traceback
+    import sys
     
     report = {
         "timestamp": datetime.now().isoformat(),
@@ -2899,45 +2698,88 @@ def display_footer():
         st.markdown("• [Documentation](https://docs.streamlit.io)")
         st.markdown("• [Support](mailto:support@example.com)")
 
-
-
-def fetch_real_twitter_data(search_term, count, bearer_token):
-    """Récupère de vrais tweets via l'API Twitter"""
-    try:
-        import tweepy
-        
-        # Connexion à l'API
-        client = tweepy.Client(bearer_token=bearer_token)
-        
-        # Recherche de tweets (français de préférence)
-        query = f"{search_term} -is:retweet lang:fr"
-        tweets = client.search_recent_tweets(
-            query=query,
-            max_results=min(count, 100),  # Max 100 par requête
-            tweet_fields=['public_metrics', 'created_at', 'lang']
-        )
-        
-        # Formater pour votre système
-        formatted_tweets = []
-        if tweets.data:
-            for tweet in tweets.data:
-                formatted_tweets.append({
-                    'text': tweet.text,
-                    'id': str(tweet.id),
-                    'created_at': tweet.created_at,
-                    'public_metrics': tweet.public_metrics
-                })
-        
-        return formatted_tweets, None  # tweets, erreur
-        
-    except tweepy.Unauthorized:
-        return [], "❌ Token invalide - Vérifiez votre Bearer Token"
-    except tweepy.TooManyRequests:
-        return [], "⏰ Limite de taux atteinte - Réessayez dans 15 minutes"
-    except Exception as e:
-        return [], f"❌ Erreur API: {str(e)}"
+# Appel du footer dans le main() si nécessaire
+def main():
+    """Interface principale améliorée avec footer"""
+    # ... (code main existant) ...
     
+    # Conteneur principal
+    main_container = st.container()
     
+    with main_container:
+        # Header principal
+        st.markdown("""
+        <div class="main-header">
+            <h1>🎯 Analyseur de Sentiment Pro</h1>
+            <p>Analyse avancée de sentiment français avec IA et visualisations interactives</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Sidebar pour la configuration
+        with st.sidebar:
+            st.header("⚙️ Configuration")
+            
+            # Mode d'analyse
+            analysis_mode = st.selectbox(
+                "Mode d'analyse",
+                [
+                    "📝 Texte Manuel", 
+                    "📁 Fichier Upload", 
+                    "🐦 Twitter Simulation",
+                    "🔄 Temps Réel",
+                    "📊 Analyse Comparative"
+                ]
+            )
+            
+            # Paramètres avancés
+            with st.expander("🔧 Paramètres Avancés"):
+                st.session_state.batch_size = st.slider("Taille de lot", 10, 100, 25)
+                st.session_state.confidence_threshold = st.slider("Seuil de confiance", 0.0, 1.0, 0.5)
+                st.session_state.use_parallel = st.checkbox("Traitement parallèle", value=True)
+                st.session_state.export_format = st.selectbox("Format d'export", ["JSON", "CSV", "Excel"])
+            
+            # Gestion des lexiques
+            with st.expander("📚 Gestion des Lexiques"):
+                if st.button("💾 Exporter lexiques"):
+                    create_lexicon_files()
+                    st.success("Lexiques exportés vers ./lexicons/")
+                
+                st.info("Vous pouvez modifier les fichiers JSON dans le dossier lexicons/ pour personnaliser l'analyse.")
+            
+            # Informations de performance
+            display_performance_info()
+            
+            # Informations système
+            with st.expander("ℹ️ Informations Système"):
+                st.markdown("""
+                **🤖 Méthodes d'analyse:**
+                - VADER (réseaux sociaux)
+                - TextBlob (linguistique)
+                - Lexique français étendu (4000+ mots)
+                
+                **📊 Fonctionnalités:**
+                - Analyse temps réel
+                - Traitement parallèle
+                - Cache intelligent
+                - Export multi-format
+                - Gestion des négations
+                - Intensificateurs français
+                """)
+        
+        # Router vers le bon mode d'analyse
+        if analysis_mode == "📝 Texte Manuel":
+            handle_manual_text_analysis()
+        elif analysis_mode == "📁 Fichier Upload":
+            handle_file_upload_analysis()
+        elif analysis_mode == "🐦 Twitter Simulation":
+            handle_twitter_analysis()
+        elif analysis_mode == "🔄 Temps Réel":
+            handle_realtime_simulation()
+        elif analysis_mode == "📊 Analyse Comparative":
+            handle_comparative_analysis()
+    
+    # Footer
+    display_footer()
 
 # Nettoyage automatique à la fermeture
 import atexit
@@ -2964,6 +2806,7 @@ def cleanup_on_exit():
 # Enregistrer la fonction de nettoyage
 atexit.register(cleanup_on_exit)
 
+# Point d'entrée principal
 # Point d'entrée principal avec gestion d'erreurs complète
 if __name__ == "__main__":
     try:
@@ -3051,7 +2894,7 @@ if __name__ == "__main__":
                 st.rerun()
         
         with col3:
-            if st.button("📊 Diagnostics système"):
+            if st.button("📊 Statistiques système"):
                 display_system_diagnostics()
         
         # Recommandations
@@ -3069,3 +2912,4 @@ if __name__ == "__main__":
                 file_name=f"error_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
                 mime="application/json"
             )
+
